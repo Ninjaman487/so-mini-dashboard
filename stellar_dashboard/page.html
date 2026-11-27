@@ -88,7 +88,7 @@ svg text { fill:var(--muted); font-size:11px; font-variant-numeric:tabular-nums;
 
 /* compact mode, for a side monitor */
 body.compact { font-size:12.5px; }
-body.compact .wrap { padding:8px 10px 20px; max-width:none; }
+body.compact .wrap { padding:8px 10px 20px; max-width:1200px; }
 body.compact h1 { font-size:15px; }
 body.compact .sub, body.compact .note, body.compact .needsnote, body.compact .hide-compact { display:none; }
 body.compact .card { padding:9px 10px; margin-bottom:8px; border-radius:9px; }
@@ -111,7 +111,7 @@ body.compact header { gap:8px; margin-bottom:8px; }
     <span class="upd" id="conn"><span class="dot"></span><span>Connecting…</span></span>
     <span class="chip" id="patch" hidden></span>
     <span class="spacer"></span>
-    <button class="btn" id="compact" aria-pressed="false" title="Dense single-column layout for a side monitor">Compact</button>
+    <button class="btn" id="compact" aria-pressed="false" title="Dense single-column layout for a side monitor">Compact: off</button>
     <button class="btn" id="notify" title="Desktop alerts when a lab queue finishes or a timer runs out">Alerts: off</button>
     <button class="btn" id="theme">Light</button>
   </header>
@@ -253,7 +253,7 @@ root.dataset.theme = localStorage.getItem("sd-theme") || "dark";
 $("theme").textContent = root.dataset.theme === "dark" ? "Light" : "Dark";
 $("theme").onclick = () => { root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
   localStorage.setItem("sd-theme", root.dataset.theme); $("theme").textContent = root.dataset.theme === "dark" ? "Light" : "Dark"; };
-function setCompact(on) { document.body.classList.toggle("compact", on); $("compact").setAttribute("aria-pressed", on); localStorage.setItem("sd-compact", on ? "1" : "0"); }
+function setCompact(on) { document.body.classList.toggle("compact", on); $("compact").setAttribute("aria-pressed", on); $("compact").textContent = "Compact: " + (on ? "on" : "off"); localStorage.setItem("sd-compact", on ? "1" : "0"); }
 setCompact(localStorage.getItem("sd-compact") === "1");
 $("compact").onclick = () => setCompact(!document.body.classList.contains("compact"));
 // Add-ons register here; see addons.py. Each hook list is called with the arguments noted.

@@ -254,9 +254,12 @@ def main(argv=None) -> int:
             pu = (f"  {POWERUP_NAMES[p.powerup]} +{_num(p.gain_from_powerup)}"
                   f" (have {owned if owned is not None else '?'})") if p.powerup else ""
             from .view import _coords
+            from .powers import for_run
+            pw = for_run(p.run, p.dungeon)
+            pws = "  powers " + "/".join(_num(pw[k]) for k in ("obsidian", "ivory", "iron", "onyx"))
             print(f"  {i}. {_name(p.dungeon):22} [{_coords(p.dungeon) or '?'}] {_num(p.relics):>6} relics  lvl {st.start_level}->{p.run.highest_cleared}"
-                  f"  closes {_dur(p.expires_in)}  {p.access}{dist}{pu}")
-        print(f"Next start after these: {seq[-1].next_start} (now {start})")
+                  f"  closes {_dur(p.expires_in)}  {p.access}{dist}{pu}{pws}")
+        print(f"Next start after these: {seq[-1].next_start} (now {start})   powers: obsidian/ivory/iron/onyx")
     _print_tracker(data)
     print("\nB battle  G gather  C craft  E explore  X boss  |  * plan  x ran/expired  - too far")
     return 0

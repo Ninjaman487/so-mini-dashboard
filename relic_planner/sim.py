@@ -129,6 +129,7 @@ class RunResult:
     levels_cleared: list[int] = field(default_factory=list)   # every level whose boss died
     failed_level: int | None = None                           # level the run ended on
     failed_rooms_cleared: int = 0                             # rooms cleared on that level
+    failed_cleared_types: list[str] = field(default_factory=list)   # their room types
     rooms_per_level: int = 0
     end_reason: str | None = None
     weak_stats: list[str] = field(default_factory=list)
@@ -156,6 +157,8 @@ def simulate_run(stats: dict, dungeon: dict, start_level: int, powerup: str | No
         ok, boss_rounds = _boss_cleared(res)
         if not ok:
             run.failed_level = level
+            run.failed_cleared_types = [s["type"] for s in res["steps"]
+                                        if s["status"] == "cleared" and s["type"] != "prefight"]
             run.failed_rooms_cleared = sum(1 for s in res["steps"]
                                            if s["status"] == "cleared" and s["type"] != "prefight")
             run.end_reason = res["termination_reason"]

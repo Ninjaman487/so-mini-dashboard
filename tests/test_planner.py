@@ -190,3 +190,12 @@ def test_tracker_sums_days_and_matches_predictions(tmp_path):
     assert t["today"] == 2265 and t["last_7_days"] == 2265
     assert t["matched"] == 1 and t["runs"][0]["predicted"] == 2200
     assert sum(v for _, v in t["per_day"]) == 3265
+
+
+def test_powers_per_room_and_failed_level():
+    from relic_planner.powers import for_run, per_room
+    from relic_planner.sim import RunResult
+    assert per_room(10) == 2 and per_room(5) == 1
+    run = RunResult(start_level=10, levels_cleared=[10], failed_level=11, failed_cleared_types=["gather"])
+    d = {"steps": [{"type": "battle"}, {"type": "gather"}, {"type": "craft"}, {"type": "boss"}]}
+    assert for_run(run, d) == {"obsidian": 4, "ivory": 2 + 2, "iron": 2, "onyx": 0}

@@ -1,11 +1,13 @@
 """Everything the Dungeons screen shows, as plain JSON, from one read of the game."""
 from __future__ import annotations
 
+import math
 import time
 
 from . import formulas as F
 from .planner import POWERUP_NAMES, evaluate, next_clears, sequential_plan
 from .tracker import summary
+from . import powers as PW
 from .relic_model import check_logs
 
 
@@ -62,7 +64,7 @@ def build(data: dict, with_upgrades: bool = True, max_here: float | None = None,
             "reward_modifier": d.get("reward_modifier") or 0, "difficulty_modifier": d.get("difficulty_modifier") or 0,
             "boss_weakness": d.get("boss_weakness"), "levels": len(p.run.levels_cleared),
             "highest": p.run.highest_cleared, "ends": p.run.end_reason, "weak_stats": sorted(set(p.run.weak_stats)),
-            "relics": round(p.relics), **_pu(p, owned),
+            "relics": round(p.relics), "powers": PW.for_run(p.run, d), **_pu(p, owned),
         })
     out.update({
         "start_level": start, "entry_cost": F.entry_cost(start), "runs_done": runs_done,
@@ -72,12 +74,16 @@ def build(data: dict, with_upgrades: bool = True, max_here: float | None = None,
         "plan": [{"system": _name(st.pick.dungeon), "access": st.pick.access, "start_level": st.start_level,
                   "next_start": st.next_start, "relics": round(st.pick.relics), "levels": len(st.pick.run.levels_cleared),
                   "highest": st.pick.run.highest_cleared, "expires_in": st.pick.expires_in,
+                  "powers": PW.for_run(st.pick.run, st.pick.dungeon),
                   "reward_modifier": st.pick.dungeon.get("reward_modifier") or 0,
                   "boss_weakness": st.pick.dungeon.get("boss_weakness"),
                   **_pu(st.pick, owned),
                   "dist_here": st.pick.dist_here, "dist_station": st.pick.dist_station,
                   "station": st.pick.dungeon.get("station_name"), "coords": _coords(st.pick.dungeon)} for st in seq],
         "start_after_plan": seq[-1].next_start if seq else start,
+        "plan_powers": {k: sum(PW.for_run(st.pick.run, st.pick.dungeon)[k] for st in seq) for k in PW.ORDER},
+        "power_check": "Power formula: {0}/{1} levels exact.".format(*PW.check_logs(data.get("logs") or []))
+                       if PW.check_logs(data.get("logs") or [])[1] else None,
         "recent_clears": list(recent),
         "tracker": summary(data.get("logs") or [], predictions, now=data.get("now") or time.time()),
         "max_here": max_here, "max_station": max_station,
@@ -94,6 +100,7 @@ def build(data: dict, with_upgrades: bool = True, max_here: float | None = None,
 
 
 def _upgrades(stats, setup, data, start, model) -> dict:
+    from .sim import simulate_run
     from .upgrades import greedy_plan, options, sample_dungeons
     wallet = data.get("wallet") or {}
     sample = sample_dungeons(data.get("dungeons") or [], data.get("logs") or [])
@@ -106,10 +113,17 @@ def _upgrades(stats, setup, data, start, model) -> dict:
         if round(o.gain) <= 0 and rows:
             break
         qc = o.price.get("quantum_cores")
+        afford_runs = None
+        for k, need in o.price.items():
+            if k.endswith("_power") and need:
+                kind = k[:-6]
+                held = next((a.get(k) for a in setup.values() if isinstance(a, dict) and k in a), 0) or 0
+                per = sum(PW.for_run(simulate_run(stats, d, start), d)[kind] for d in sample) / len(sample)
+                afford_runs = 0 if held >= need else (math.ceil((need - held) / per) if per > 0 else None)
         rows.append({"label": o.up.label(), "activity": o.up.activity, "kind": o.up.kind, "points": o.up.points,
                      "after": round(o.after), "gain": round(o.gain), "can_afford": o.can_afford,
                      "cost": {k: v for k, v in o.price.items() if v},
-                     "relic_cost": qc * F.QUANTUM_CORE_RELIC_COST if qc else None})
+                     "relic_cost": qc * F.QUANTUM_CORE_RELIC_COST if qc else None, "runs_to_afford": afford_runs})
         if len(rows) >= 12:
             break
     return {"ok": True, "layouts": len(sample), "per_run": round(base), "setup": setup, "options": rows,
