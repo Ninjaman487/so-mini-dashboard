@@ -33,7 +33,8 @@ def _pu(p, owned: dict) -> dict:
 
 
 def build(data: dict, with_upgrades: bool = True, max_here: float | None = None,
-          max_station: float | None = None, predictions: list[dict] | None = None) -> dict:
+          max_station: float | None = None, predictions: list[dict] | None = None,
+          chosen: list[str] | None = None) -> dict:
     stats = data.get("stats")
     out = {"ok": bool(stats), "read_at": data.get("now") or time.time(), "errors": data.get("errors") or []}
     if not stats:
@@ -46,8 +47,11 @@ def build(data: dict, with_upgrades: bool = True, max_here: float | None = None,
                      max_here=max_here, max_station=max_station)
     runs_done = data.get("daily_runs") or 0
     runs_left = max(0, F.SOLO_MAX_DAILY_RUNS - runs_done)
+    open_ids = {d.get("_id") for d in data.get("dungeons") or []}
+    only = {c for c in chosen or [] if c in open_ids} or None
     seq = sequential_plan(stats, data.get("dungeons") or [], model, runs_left, owned,
-                          now=data.get("now") or time.time(), max_here=max_here, max_station=max_station)
+                          now=data.get("now") or time.time(), max_here=max_here, max_station=max_station,
+                          only=only)
     in_plan = {id(st.pick.dungeon): i for i, st in enumerate(seq)}
     recent = stats.get("recent_clears") or []
     highest = stats.get("highest_cleared") or 0
@@ -55,6 +59,7 @@ def build(data: dict, with_upgrades: bool = True, max_here: float | None = None,
     for p in picks:
         d = p.dungeon
         rows.append({
+            "id": d.get("_id"), "picked": bool(only) and d.get("_id") in only,
             "system": _name(d), "access": p.access, "usable": p.usable, "in_plan": id(d) in in_plan,
             "next_start": F.starting_level(next_clears(recent, p.run.highest_cleared), max(highest, p.run.highest_cleared))
                           if p.run.highest_cleared else start,
@@ -86,7 +91,7 @@ def build(data: dict, with_upgrades: bool = True, max_here: float | None = None,
                        if PW.check_logs(data.get("logs") or [])[1] else None,
         "recent_clears": list(recent),
         "tracker": summary(data.get("logs") or [], predictions, now=data.get("now") or time.time()),
-        "max_here": max_here, "max_station": max_station,
+        "max_here": max_here, "max_station": max_station, "manual": bool(only),
     })
     try:
         from .__main__ import streak_check

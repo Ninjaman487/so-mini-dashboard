@@ -70,7 +70,8 @@ class DungeonsAddon(Addon):
                 return _json({"ok": False, "why": self.error or "No data yet."})
             try:
                 v = build(self.data, max_here=limit("max_here"), max_station=limit("max_station"),
-                          predictions=self.predictions.load())
+                          predictions=self.predictions.load(),
+                          chosen=[c for c in (query.get("pick") or "").split(",") if c])
                 if v.get("ok"):
                     self.predictions.record([r for r in v["entrances"] if r["usable"]], v["start_level"],
                                             self.data.get("now"))

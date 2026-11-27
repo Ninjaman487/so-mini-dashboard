@@ -10,7 +10,9 @@
 .dg-tag { font-size:11.5px; border-radius:999px; padding:1px 8px; border:1px solid var(--ring); color:var(--ink2); white-space:nowrap; }
 .dg-tag.here { color:var(--good); border-color:var(--good); } .dg-tag.travel { color:var(--warn); border-color:var(--warn); }
 tr.dg-off td { color:var(--muted); }
-.dg-scroll { overflow-x:auto; }
+.dg-scroll { overflow:auto; position:relative; }
+.dg-tight th { position:sticky; top:0; background:var(--surface); z-index:1; }
+.dg-cb { margin:0; cursor:pointer; }
 .dg-t:not(.dg-detail) .dg-x { display:none; }
 .dg-tight td, .dg-tight th { padding:5px 6px; font-size:13px; }
 .dg-t td.n, .dg-t th.n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
@@ -70,6 +72,8 @@ const lim = {here: localStorage.getItem("dg-maxhere") || "", st: localStorage.ge
 $("dgmaxhere").value = lim.here; $("dgmaxst").value = lim.st;
 for (const [id, key, k] of [["dgmaxhere", "dg-maxhere", "here"], ["dgmaxst", "dg-maxst", "st"]])
   $(id).onchange = () => { lim[k] = $(id).value.trim(); localStorage.setItem(key, lim[k]); load(false); };
+let picks = JSON.parse(localStorage.getItem("dg-pick") || "[]");
+const savePicks = () => localStorage.setItem("dg-pick", JSON.stringify(picks));
 const ly = v => v == null ? '<span class="mut">?</span>' : short(Math.round(v)) + " ly";
 async function load(refresh) {
   if (busy) return; busy = true; $("dgread").textContent = "Reading the game…";
@@ -77,6 +81,7 @@ async function load(refresh) {
   if (refresh) q.set("refresh", "1");
   if (lim.here !== "") q.set("max_here", lim.here);
   if (lim.st !== "") q.set("max_station", lim.st);
+  if (picks.length) q.set("pick", picks.join(","));
   try { V = await api("/api/dungeons" + (q.toString() ? "?" + q : "")); at = Date.now(); render(); }
   catch (e) { $("dgmsg").innerHTML = `<div class="empty">Could not reach the dashboard server (${esc(e.message)}).</div>`; }
   finally { busy = false; }
@@ -98,8 +103,10 @@ function render() {
     .map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
 
   const plan = V.plan || [];
-  $("dgplansub").textContent = V.runs_done >= V.runs_max ? "all runs used, reset at midnight UTC"
-    : `${V.runs_max - V.runs_done} left` + (plan.length ? ` · next start ${V.start_after_plan}` : "");
+  $("dgplansub").innerHTML = (V.runs_done >= V.runs_max ? "all runs used, reset at midnight UTC"
+    : `${V.runs_max - V.runs_done} left` + (plan.length ? ` · next start ${V.start_after_plan}` : ""))
+    + (V.manual ? ` · your picks <button class="btn" id="dgauto" style="padding:1px 8px;font-size:12px">Auto</button>` : "");
+  if ($("dgauto")) $("dgauto").onclick = () => { picks = []; savePicks(); load(false); };
   const kv = rows => `<div class="dg-kv">${rows.filter(Boolean).map(([k, v, x]) => `<span class="k${x ? " dg-x" : ""}">${k}</span><span class="v${x ? " dg-x" : ""}">${v}</span>`).join("")}</div>`;
   $("dgplan").innerHTML = plan.length ? plan.map((r, i) => `<div class="dg-pick">
       <div style="display:flex;justify-content:space-between;gap:8px"><b>${i + 1}. ${esc(r.system)}</b>${access(r.access)}</div>
@@ -130,10 +137,10 @@ function render() {
   }
 
   $("dgentsub").textContent = V.entrances.length ? `${V.entrances.length}` : "";
-  $("dgents").innerHTML = V.entrances.length ? `<div class="dg-scroll"><table class="dg-tight"><tr><th>System</th><th class="n">Coordinates</th><th>Access</th><th class="n" title="Distance from you">You</th><th class="n" title="Distance from nearest station">Station</th><th class="n">Closes</th><th class="dg-x">Rooms</th>
+  $("dgents").innerHTML = V.entrances.length ? `<div class="dg-scroll"><table class="dg-tight"><tr><th title="Tick to choose your own plan">Plan</th><th>System</th><th class="n">Coordinates</th><th>Access</th><th class="n" title="Distance from you">You</th><th class="n" title="Distance from nearest station">Station</th><th class="n">Closes</th><th class="dg-x">Rooms</th>
       <th class="n dg-x">Reward</th><th class="n dg-x" title="Difficulty">Diff.</th><th class="dg-x">Weakness</th><th class="n">Levels</th><th class="dg-x">Ends on</th>
       <th class="n">Relics</th><th class="n" title="Obsidian">Obs</th><th class="n" title="Ivory">Ivo</th><th class="n">Iron</th><th class="n">Onyx</th><th class="n" title="Estimated start level of your next run if you run this one now">Next</th><th>Best Power-Up</th></tr>
-    ${V.entrances.map(r => `<tr class="${r.usable && !r.too_far ? "" : "dg-off"}"><td>${r.in_plan ? "★ " : ""}${esc(r.system)}${!r.usable ? ' <span class="mut">(ran)</span>' : r.too_far ? ' <span class="mut">(too far)</span>' : ""}</td><td class="n">${esc(r.coords || "–")}</td>
+    ${V.entrances.map(r => `<tr class="${r.usable && !r.too_far ? "" : "dg-off"}"><td><input type="checkbox" class="dg-cb" data-id="${esc(r.id || "")}"${(V.manual ? r.picked : r.in_plan) ? " checked" : ""}${r.usable && r.id ? "" : " disabled"}></td><td>${r.in_plan ? "★ " : ""}${esc(r.system)}${!r.usable ? ' <span class="mut">(ran)</span>' : r.too_far ? ' <span class="mut">(too far)</span>' : ""}</td><td class="n">${esc(r.coords || "–")}</td>
       <td>${access(r.access)}</td><td class="n">${ly(r.dist_here)}</td><td class="n" title="${esc(r.station || "")}">${ly(r.dist_station)}</td><td class="n">${left(r.expires_in)}</td><td class="dg-rooms dg-x">${rooms(r.rooms)}</td>
       <td class="n dg-x">${pct(r.reward_modifier)}</td><td class="n dg-x">${pct(r.difficulty_modifier)}</td><td class="dg-x">${esc(r.boss_weakness || "–")}</td>
       <td class="n">${r.highest ? `${V.start_level} → ${r.highest}` : "–"}</td><td class="dg-x">${ends(r)}</td><td class="n">${short(r.relics)}</td>
@@ -141,6 +148,15 @@ function render() {
       <td class="n">${r.next_start}${r.next_start !== V.start_level ? ` <span class="mut">(${r.next_start > V.start_level ? "+" : ""}${r.next_start - V.start_level})</span>` : ""}</td>
       <td>${r.powerup ? `${esc(r.powerup)} <span class="pos">+${short(r.powerup_gain)}</span>` : "–"}</td></tr>`).join("")}</table></div>`
     : `<div class="empty">No solo dungeon entrances are open.</div>`;
+  if (V.manual) { const open = new Set(V.entrances.map(r => r.id)); const kept = picks.filter(id => open.has(id)); if (kept.length !== picks.length) { picks = kept; savePicks(); } }
+  else if (picks.length) { picks = []; savePicks(); }
+  for (const cb of $("dgents").querySelectorAll(".dg-cb")) cb.onchange = () => {
+    if (!V.manual) picks = V.entrances.filter(r => r.in_plan && r.id).map(r => r.id);
+    picks = cb.checked ? [...new Set([...picks, cb.dataset.id])] : picks.filter(id => id !== cb.dataset.id);
+    savePicks(); load(false);
+  };
+  const box = $("dgents").querySelector(".dg-scroll"), trs = box ? box.querySelectorAll("tr") : [];
+  if (box) box.style.maxHeight = trs.length > 11 ? (trs[10].offsetTop + trs[10].offsetHeight + 1) + "px" : "";
 
   const U = V.upgrades;
   if (!U) { $("dgupsub").textContent = ""; $("dgsetup").innerHTML = `<div class="empty">Open Dungeons > Setup in the game.</div>`; $("dgups").innerHTML = $("dgbest").innerHTML = ""; }

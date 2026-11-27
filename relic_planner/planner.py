@@ -115,9 +115,10 @@ def next_clears(recent: list[int] | None, highest_reached: int) -> list[int]:
 def sequential_plan(stats: dict, dungeons: list[dict], model: RelicModel, runs_left: int,
                     powerups_owned: dict | None = None, now: float | None = None,
                     max_here: float | None = None, max_station: float | None = None,
-                    avoid_travel: bool = False) -> list[PlanStep]:
+                    avoid_travel: bool = False, only: set | None = None) -> list[PlanStep]:
     """Today's runs in order, without Power-Ups. Each run changes your recent clears, and so the start level of
-    the next run, so every run is planned at the start level it will actually have."""
+    the next run, so every run is planned at the start level it will actually have.
+    With `only` (entrance ids you picked), the plan uses just those, whatever the travel limits."""
     recent = list(stats.get("recent_clears") or [])
     highest = stats.get("highest_cleared") or 0
     used: set = set()
@@ -126,7 +127,10 @@ def sequential_plan(stats: dict, dungeons: list[dict], model: RelicModel, runs_l
         start = F.starting_level(recent, highest)
         picks = evaluate(stats, [d for d in dungeons if id(d) not in used], model, start, None, now,
                          max_here, max_station)
-        pool = [p for p in picks if p.usable and not p.too_far and (p.access != "travel" or not avoid_travel)]
+        if only is not None:
+            pool = [p for p in picks if p.usable and p.dungeon.get("_id") in only]
+        else:
+            pool = [p for p in picks if p.usable and not p.too_far and (p.access != "travel" or not avoid_travel)]
         if not pool:
             break
         best = pool[0]
