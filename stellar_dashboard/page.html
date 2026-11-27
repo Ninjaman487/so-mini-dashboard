@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SO Mini Dashboard</title>
+<style>
+:root {
+  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#898781;
+  --grid:#e1e0d9; --axis:#c3c2b7; --ring:rgba(11,11,11,0.10); --wash:rgba(11,11,11,0.05);
+  --good:#006300; --warn:#a86b00; --bad:#b42318; --warnwash:rgba(168,107,0,0.08);
+  --c0:#2a78d6; --c1:#eb6834; --c2:#1baf7a; --c3:#eda100; --c4:#e87ba4; --c6:#6250d6;
+}
+:root[data-theme=dark] {
+  --page:#0d0d0d; --surface:#1a1a19; --ink:#f0efec; --ink2:#c3c2b7; --muted:#898781;
+  --grid:#2c2c2a; --axis:#383835; --ring:rgba(255,255,255,0.10); --wash:rgba(255,255,255,0.06);
+  --good:#0ca30c; --warn:#c98500; --bad:#e66767; --warnwash:rgba(201,133,0,0.10);
+  --c0:#3987e5; --c1:#d95926; --c2:#199e70; --c3:#c98500; --c4:#d55181; --c6:#9085e9;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--page); color:var(--ink); font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif; }
+.wrap { max-width:1600px; margin:0 auto; padding:18px 24px 40px; }
+header { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+h1 { font-size:20px; margin:0 4px 0 0; font-weight:650; }
+.spacer { flex:1; }
+.upd { color:var(--ink2); font-size:13px; display:flex; align-items:center; gap:6px; }
+.chip { font-size:12px; color:var(--ink2); border:1px solid var(--ring); border-radius:999px; padding:2px 9px; white-space:nowrap; }
+.dot { width:8px; height:8px; border-radius:50%; background:var(--muted); display:inline-block; flex:none; }
+.chip.upd-new { color:var(--good); border-color:var(--good); text-decoration:none; font-weight:600; }
+.dot.on { background:var(--good); } .dot.warn { background:var(--warn); } .dot.bad { background:var(--bad); }
+.btn { border:1px solid var(--axis); background:var(--surface); color:var(--ink); font-weight:600; border-radius:8px; padding:6px 10px; font:inherit; cursor:pointer; text-decoration:none; }
+.btn:hover { background:var(--wash); }
+.btn[aria-pressed=true] { background:var(--wash); }
+.seg { display:inline-flex; border:1px solid var(--ring); border-radius:8px; overflow:hidden; background:var(--surface); margin-bottom:12px; }
+.seg button { border:0; background:none; color:var(--ink2); padding:7px 14px; font:inherit; cursor:pointer; }
+.seg button[aria-pressed=true] { background:var(--wash); color:var(--ink); font-weight:600; }
+.card { background:var(--surface); border:1px solid var(--ring); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+.card h2 { font-size:15px; margin:0 0 2px; font-weight:600; display:flex; align-items:center; gap:8px; }
+.card h2 .count { font-weight:500; color:var(--ink2); font-size:12.5px; }
+.sub { color:var(--ink2); font-size:12.5px; margin:0 0 10px; }
+.cols { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(0,1fr); gap:12px; align-items:start; }
+@media (max-width:1100px) { .cols { grid-template-columns:1fr; } }
+
+/* needs-you strip */
+.needs { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:8px; }
+.need { border:1px solid var(--ring); border-radius:10px; padding:8px 11px; background:var(--surface); min-width:0; }
+.need .k { color:var(--ink2); font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.need .v { font-size:18px; font-weight:650; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.need .s { color:var(--muted); font-size:11.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.need.attn { border-color:var(--warn); background:var(--warnwash); }
+.need.attn .v { color:var(--warn); }
+.needsnote { color:var(--muted); font-size:12px; margin-top:8px; }
+
+.empty { color:var(--ink2); padding:6px 0; }
+
+table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; font-size:13px; }
+th { text-align:left; color:var(--ink2); font-weight:500; border-bottom:1px solid var(--axis); padding:6px 8px; white-space:nowrap; }
+td { border-bottom:1px solid var(--grid); padding:5px 8px; white-space:nowrap; }
+td.n, th.n { text-align:right; }
+tr.group td { color:var(--ink2); font-size:12px; font-weight:600; padding-top:12px; border-bottom:1px solid var(--axis); }
+tr.group:first-child td { padding-top:4px; }
+.gdot { display:inline-block; width:8px; height:8px; border-radius:2px; margin-right:6px; vertical-align:0; }
+.pos { color:var(--good); } .neg { color:var(--bad); } .mut { color:var(--muted); } .warnt { color:var(--warn); }
+.bar { height:6px; border-radius:3px; background:var(--grid); overflow:hidden; min-width:80px; }
+.bar > i { display:block; height:100%; background:var(--c0); }
+.flag { display:inline-block; font-size:11px; border:1px solid var(--ring); border-radius:4px; padding:0 5px; margin:1px 3px 1px 0; color:var(--ink2); }
+.flag.bad { color:var(--bad); border-color:var(--bad); }
+.flag.warn { color:var(--warn); border-color:var(--warn); }
+.tools { display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap; }
+select { font:inherit; color:var(--ink); background:var(--surface); border:1px solid var(--axis); border-radius:6px; padding:3px 6px; }
+label.inline { color:var(--ink2); font-size:12.5px; display:flex; align-items:center; gap:6px; }
+h3 { font-size:13px; font-weight:600; color:var(--ink2); margin:12px 0 4px; }
+h3:first-of-type { margin-top:4px; }
+
+svg { display:block; width:100%; overflow:visible; }
+svg text { fill:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
+.note { color:var(--muted); font-size:12px; margin-top:8px; }
+.skills { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; }
+.skill .top { display:flex; align-items:baseline; gap:6px; }
+.skill .lv { font-size:20px; font-weight:650; font-variant-numeric:tabular-nums; }
+.skill .bar { margin:5px 0 3px; }
+.skill .s { color:var(--ink2); font-size:12px; font-variant-numeric:tabular-nums; }
+.kv { display:grid; grid-template-columns:auto 1fr; gap:3px 12px; font-size:13px; font-variant-numeric:tabular-nums; }
+.kv .k { color:var(--ink2); }
+.boards { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
+.board h3 { margin-top:2px; }
+.worthnum { font-size:26px; font-weight:650; font-variant-numeric:tabular-nums; }
+
+/* compact mode, for a side monitor */
+body.compact { font-size:12.5px; }
+body.compact .wrap { padding:8px 10px 20px; max-width:none; }
+body.compact h1 { font-size:15px; }
+body.compact .sub, body.compact .note, body.compact .needsnote, body.compact .hide-compact { display:none; }
+body.compact .card { padding:9px 10px; margin-bottom:8px; border-radius:9px; }
+body.compact .cols { grid-template-columns:1fr; gap:8px; }
+body.compact .needs { grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:6px; }
+body.compact .need { padding:5px 8px; }
+body.compact .need .v { font-size:15px; }
+body.compact td, body.compact th { padding:3px 6px; font-size:12px; }
+body.compact .seg button { padding:5px 9px; }
+body.compact .skills { grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:6px; }
+body.compact header { gap:8px; margin-bottom:8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>SO Mini Dashboard</h1>
+    <span class="chip" id="ver" title="Dashboard version"></span>
+    <a class="chip upd-new" id="newver" target="_blank" rel="noopener" hidden></a>
+    <span class="upd" id="conn"><span class="dot"></span><span>Connecting…</span></span>
+    <span class="chip" id="patch" hidden></span>
+    <span class="spacer"></span>
+    <button class="btn" id="compact" aria-pressed="false" title="Dense single-column layout for a side monitor">Compact</button>
+    <button class="btn" id="notify" title="Desktop alerts when a lab queue finishes or a timer runs out">Alerts: off</button>
+    <button class="btn" id="theme">Light</button>
+  </header>
+
+  <div id="main">
+    <div class="seg" role="tablist" id="tabs">
+      <button data-tab="overview" aria-pressed="true">Overview</button>
+      <button data-tab="resources" aria-pressed="false">Resources</button>
+      <button data-tab="lab" aria-pressed="false">Lab</button>
+      <button data-tab="market" aria-pressed="false">Market</button>
+      <button data-tab="progress" aria-pressed="false">Progress</button>
+    </div>
+
+    <section data-view="overview">
+      <div class="card" id="needcard">
+        <h2>Needs you <span class="count" id="needcount"></span></h2>
+        <div class="needs" id="needs"></div>
+        <div class="needsnote" id="upnext"></div>
+      </div>
+      <div class="cols">
+        <div>
+          <div class="card"><h2>Lab <span class="count" id="labsub"></span></h2><div id="labmini"></div></div>
+          <div class="card"><h2>Skills</h2>
+            <p class="sub">XP per hour is measured over the last few hours the dashboard was open; the time to the next level assumes that pace.</p>
+            <div class="skills" id="skills"></div></div>
+        </div>
+        <div>
+          <div class="card"><h2>Ship and account</h2><div id="account"></div></div>
+          <div class="card"><h2>Resources <span class="count" id="ressub"></span></h2><div id="resmini"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section data-view="resources" hidden>
+      <div class="cols">
+        <div class="card"><h2>Currencies and resources</h2>
+          <p class="sub">Value uses the best market buy order (what you could sell for now). Change per hour needs 10+ minutes of history; unchanged ones are left blank.</p>
+          <div class="tools"><label class="inline">Sort <select id="ressort">
+            <option value="game">game order</option><option value="value">by value</option><option value="amount">by amount</option>
+            <option value="change">by change per hour</option><option value="name">by name</option></select></label></div>
+          <div id="restable"></div></div>
+        <div class="card"><h2>Materials</h2><div id="mattable"></div></div>
+      </div>
+    </section>
+
+    <section data-view="lab" hidden>
+      <div class="cols">
+        <div class="card"><h2>Base buildings <span class="count" id="basecount"></span></h2>
+          <p class="sub">Finish times are in your local time. A moon marks queues that finish overnight (11 PM to 8 AM).</p>
+          <div id="basetable"></div></div>
+        <div class="card"><h2>Lab buildings <span class="count" id="labcount"></span></h2>
+          <p class="sub">Idle buildings first after running ones; buildings at level 0 are not built yet.</p>
+          <div id="labtable"></div></div>
+      </div>
+      <p class="note">Read-only: queue, claim and cancel stay in the game.</p>
+    </section>
+
+    <section data-view="market" hidden>
+      <div class="card"><h2>Market prices</h2>
+        <p class="sub" id="marketsub"></p>
+        <div class="tools"><button class="btn" id="mrefresh">Refresh prices now</button></div>
+        <div id="markettable"></div>
+        <p class="note">Trends come from prices saved on each update; they fill in as the dashboard runs. Prices are read with the same requests the game's Market page makes, one every few seconds. Buying and selling stay in the game.</p></div>
+    </section>
+
+    <section data-view="progress" hidden>
+      <div class="cols">
+        <div class="card"><h2>Net worth <span class="count" id="worthsub"></span></h2>
+          <p class="sub">Credits plus every resource at its best buy order, saved every 10 minutes while the dashboard runs. One point per day.</p>
+          <div id="worth"></div></div>
+        <div class="card"><h2>Income per hour <span class="count" id="incomesub"></span></h2>
+          <p class="sub">Change per hour of each resource, valued at today's buy price. Needs 10+ minutes of history.</p>
+          <div id="income"></div></div>
+      </div>
+      <div class="card"><h2>Minigame leaderboards</h2>
+        <p class="sub" id="boardsub">This week's top five and your entry.</p>
+        <div class="boards" id="boards"></div></div>
+    </section>
+  </div>
+</div>
+
+<script>
+const TOKEN = "__SD_TOKEN__";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+const nf = new Intl.NumberFormat();
+const isNum = v => typeof v === "number" && isFinite(v);
+// Full number up to 100K, then 538K / 1.55M / 2.4B / 1.2T.
+function short(v) {
+  if (!isNum(v)) return "–";
+  const a = Math.abs(v);
+  if (a < 1e5) return nf.format(Math.round(v * 10) / 10);
+  for (const [d, u] of [[1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "K"]])
+    if (a >= d) { const x = v / d; return (Math.abs(x) >= 100 ? x.toFixed(0) : Math.abs(x) >= 10 ? x.toFixed(1) : x.toFixed(2)) + u; }
+  return nf.format(v);
+}
+const num = short;
+const pretty = s => String(s ?? "").replace(/_/g, " ").replace(/(^|\s)\S/g, c => c.toUpperCase());   // dark_matter -> Dark Matter
+const dur = s => { if (!isNum(s)) return "–"; s = Math.max(0, Math.round(s));
+  const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60), x = s%60;
+  return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : m ? `${m}m ${x}s` : `${x}s`; };
+const clock = ms => new Date(ms).toLocaleString([], Math.abs(ms - Date.now()) > 5 * 86400e3
+  ? {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"} : {weekday:"short", hour:"numeric", minute:"2-digit"});
+const ago = t => t ? dur(Date.now()/1000 - t) + " ago" : "–";
+// The game stores some times in seconds and some in milliseconds.
+const toMs = v => !isNum(v) || v <= 0 ? null : v > 1e12 ? v : v > 1e9 ? v * 1000 : null;
+const overnight = ms => { const h = new Date(ms).getHours(); return h >= 23 || h < 8; };
+async function api(path, opts={}) {
+  const r = await fetch(path, {...opts, headers:{"X-SD-Token":TOKEN, "Content-Type":"application/json"}});
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+function spark(ser, w = 160, h = 28) {
+  if (!ser || ser.length < 2) return "";
+  const xs = ser.map((p, i) => isNum(p[0]) ? p[0] : i), ys = ser.map(p => p[1]), lo = Math.min(...ys), hi = Math.max(...ys);
+  ser = ser.map((p, i) => [xs[i], p[1]]);
+  const x0 = Math.min(...xs), xr = (Math.max(...xs) - x0) || 1;
+  const pts = ser.map(p => `${((p[0]-x0)/xr*w).toFixed(1)},${(h - (p[1]-lo)/((hi-lo)||1)*h).toFixed(1)}`).join(" ");
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:${w}px;height:${h}px" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="var(--c0)" stroke-width="1.5"/></svg>`;
+}
+function lineChart(ser, label) {
+  if (!ser || ser.length < 2) return `<div class="empty">Needs at least two saved points; check back later.</div>`;
+  const w = 600, h = 130, pad = 34, xs = ser.map(p => p[0]), ys = ser.map(p => p[1]);
+  const lo = Math.min(...ys), hi = Math.max(...ys), x0 = Math.min(...xs), xr = (Math.max(...xs) - x0) || 1, yr = (hi - lo) || 1;
+  const X = t => pad + (t - x0) / xr * (w - pad), Y = v => 8 + (h - 24) * (1 - (v - lo) / yr);
+  const pts = ser.map(p => `${X(p[0]).toFixed(1)},${Y(p[1]).toFixed(1)}`).join(" ");
+  const day = t => new Date(t*1000).toLocaleDateString([], {month:"short", day:"numeric"});
+  return `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}">
+    <line x1="${pad}" x2="${w}" y1="${Y(hi)}" y2="${Y(hi)}" stroke="var(--grid)"/><line x1="${pad}" x2="${w}" y1="${Y(lo)}" y2="${Y(lo)}" stroke="var(--grid)"/>
+    <text x="${pad-4}" y="${Y(hi)+4}" text-anchor="end">${short(hi)}</text><text x="${pad-4}" y="${Y(lo)+4}" text-anchor="end">${short(lo)}</text>
+    <text x="${pad}" y="${h-2}">${day(x0)}</text><text x="${w}" y="${h-2}" text-anchor="end">${day(x0 + xr)}</text>
+    <polyline points="${pts}" fill="none" stroke="var(--c0)" stroke-width="2"/></svg>`;
+}
+
+// ---------- theme, compact, tabs, alerts
+const root = document.documentElement;
+root.dataset.theme = localStorage.getItem("sd-theme") || "dark";
+$("theme").textContent = root.dataset.theme === "dark" ? "Light" : "Dark";
+$("theme").onclick = () => { root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+  localStorage.setItem("sd-theme", root.dataset.theme); $("theme").textContent = root.dataset.theme === "dark" ? "Light" : "Dark"; };
+function setCompact(on) { document.body.classList.toggle("compact", on); $("compact").setAttribute("aria-pressed", on); localStorage.setItem("sd-compact", on ? "1" : "0"); }
+setCompact(localStorage.getItem("sd-compact") === "1");
+$("compact").onclick = () => setCompact(!document.body.classList.contains("compact"));
+// Add-ons register here; see addons.py. Each hook list is called with the arguments noted.
+const hooks = {tick: [], show: [], needs: [], boardRows: []};   // (S) · (tab) · (add, S) · (boardKey, S) -> [[label, html]]
+let tab = localStorage.getItem("sd-tab") || "overview";
+function showTab(t) {
+  if (!document.querySelector(`[data-view="${t}"]`)) t = "overview";
+  tab = t; localStorage.setItem("sd-tab", t);
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-pressed", b.dataset.tab === t));
+  document.querySelectorAll("[data-view]").forEach(s => s.hidden = s.dataset.view !== t);
+  if (t === "progress" && S) renderProgress();
+  for (const f of hooks.show) f(t); }
+function bindTab(b) { b.onclick = () => showTab(b.dataset.tab); }
+document.querySelectorAll("#tabs button").forEach(bindTab);
+function addTab(key, label, html) {
+  const b = document.createElement("button"); b.dataset.tab = key; b.setAttribute("aria-pressed", "false"); b.textContent = label;
+  $("tabs").append(b); bindTab(b);
+  const s = document.createElement("section"); s.dataset.view = key; s.hidden = true; s.innerHTML = html;
+  $("main").append(s); return s; }
+let alerts = localStorage.getItem("sd-alerts") === "1" && "Notification" in window && Notification.permission === "granted";
+const paintAlerts = () => $("notify").textContent = "Alerts: " + (alerts ? "on" : "off");
+paintAlerts();
+$("notify").onclick = async () => {
+  if (!alerts && "Notification" in window && Notification.permission !== "granted") await Notification.requestPermission();
+  alerts = !alerts && "Notification" in window && Notification.permission === "granted";
+  localStorage.setItem("sd-alerts", alerts ? "1" : "0"); paintAlerts(); };
+const told = new Set();
+function alertOnce(key, title, body) { if (!alerts || told.has(key)) return; told.add(key); try { new Notification(title, {body}); } catch {} }
+const resort = localStorage.getItem("sd-ressort"); if (resort) $("ressort").value = resort;
+$("ressort").onchange = () => { localStorage.setItem("sd-ressort", $("ressort").value); if (S) renderResources(); };
+
+// ---------- shared
+let S = null;
+function gameHint() {
+  const g = S.game;
+  if (!g.connected) return "Game not connected: " + (g.why || "start Stellar Odyssey.");
+  if (!g.ok) return "Connected, but the game has not loaded your account yet (sign in, or wait for the main screen).";
+  return "No data.";
+}
+
+// ---------- needs-you strip
+// Tiles only for things you can act on now, or that end within two hours; other timers go
+// on the "Coming up" line underneath.
+const SOON_MS = 2 * 3600e3;
+function needTiles() {
+  const g = S.game, T = g.timers || {}, now = Date.now(), tiles = [];
+  const add = (key, label, value, sub, attn, soon, alertMsg) => tiles.push({key, label, value, sub, attn, soon: soon ?? Infinity, alertMsg});
+  const left = ms => ms - now;
+  // lab: finished queues and idle buildings (running ones are on the Lab card)
+  const rows = labRowsNow();
+  for (const r of rows.filter(r => r.queued)) {
+    const done = r.remaining_s <= 0;
+    add("lab:" + r.id, `${r.kind === "base" ? "Base" : "Lab"} · ${r.name}`, done ? "Done" : dur(r.remaining_s),
+        done ? "Queue finished" : (r.finish_ms ? "Finishes " + clock(r.finish_ms) + (overnight(r.finish_ms) ? " 🌙" : "") : ""),
+        done, r.remaining_s * 1000, done ? `${r.name} lab queue finished` : null);
+  }
+  const idle = rows.filter(r => !r.queued && r.built);
+  if (idle.length) add("lab:idle", "Idle lab buildings", String(idle.length), idle.map(r => r.name).join(", "), true, 0, null);
+  // offline actions for battle and gather
+  for (const [k, label] of [["battle", "Battling"], ["gather", "Gathering"]]) {
+    const t = T[k]; if (!t) continue;
+    const end = toMs(t.offline_until);
+    if (t.active && end) { const l = left(end);
+      add(k, label, l > 0 ? dur(l / 1000) : "Ended", l > 0 ? "Offline actions end " + clock(end) : "Offline actions ran out",
+          l < 3600e3, l, l <= 0 ? `${label}: offline actions ran out` : null);
+    } else if (!t.active) add(k, label, "Stopped", t.level != null ? `Level ${t.level}` : "", true, 0, null);
+  }
+  // engine
+  const e = T.explore || {};
+  const ready = toMs(e.engine_ready_at);
+  if (!e.travelling && ready && left(ready) > 0) add("engine", "Engine cooldown", dur(left(ready) / 1000), "Ready " + clock(ready), false, left(ready), null);
+  else if (!e.travelling && (ready !== null || e.fuel != null)) add("engine", "Engine", "Ready", isNum(e.fuel) ? `Fuel ${short(e.fuel)}` : "", true, 0, "Engine ready to jump");
+  // boosts and premium
+  for (const b of T.boosts || []) { const end = toMs(b.end); if (!end || end < now) continue;
+    add("boost:" + b.name, "Boost · " + pretty(b.name), dur(left(end) / 1000), "Ends " + clock(end), left(end) < 1800e3, left(end), null); }
+  const pe = toMs(T.premium?.end);
+  if (T.premium?.active && pe) add("premium", "Premium", dur(left(pe) / 1000), "Ends " + clock(pe), left(pe) < 86400e3, left(pe), null);
+  if (T.boss?.event && !T.boss.joined) add("boss", "Galaxy Boss", "Not joined", "Event running", true, 0, "Galaxy Boss event: not joined");
+  const V = T.voyager;
+  if (V && !V.queue && isNum(V.fuel)) add("voyager", "Voyager", "Idle", `Fuel ${short(V.fuel)} / ${short(V.fuel_max)}`, true, 0, null);
+  for (const f of hooks.needs) f(add, S);
+  tiles.sort((a, b) => (b.attn - a.attn) || (a.soon - b.soon));
+  return tiles;
+}
+function renderNeeds() {
+  if (!S.game.ok) { $("needs").innerHTML = `<div class="empty">${esc(gameHint())}</div>`; $("needcount").textContent = ""; $("upnext").textContent = ""; return; }
+  const all = needTiles();
+  const tiles = all.filter(t => t.attn || t.soon < SOON_MS), later = all.filter(t => !tiles.includes(t) && isFinite(t.soon));
+  $("needcount").textContent = tiles.length ? `${tiles.length} to look at` : "";
+  $("needs").innerHTML = tiles.length ? tiles.map(t => `<div class="need ${t.attn ? "attn" : ""}" title="${esc(t.label + (t.sub ? " · " + t.sub : ""))}">
+    <div class="k">${esc(t.label)}</div><div class="v">${esc(t.value)}</div><div class="s">${esc(t.sub || " ")}</div></div>`).join("")
+    : `<div class="empty">Nothing needs you right now.</div>`;
+  $("upnext").textContent = later.length ? "Coming up: " + later.slice(0, 5).map(t => `${t.label.replace(/^(Base|Lab|Boost) · /, "")} ${t.value}`).join(" · ") : "";
+  for (const t of tiles) if (t.attn && t.alertMsg) alertOnce("need:" + t.key + ":" + t.value, t.alertMsg, t.sub || "");
+}
+
+// ---------- resources
+// The game's own node types; the last resource in each is the rare one.
+const GROUPS = [
+  ["Rocky", "var(--c1)", ["copper", "gold", "platinum", "silver", "dark_matter"]],
+  ["Icy", "var(--c0)", ["carbon", "nitrogen", "sulfur", "water", "silicon"]],
+  ["Gas", "var(--c2)", ["ammonia", "helium", "hydrogen", "methane", "argon"]],
+  ["Crystal", "var(--c4)", ["diamond", "emerald", "ruby", "sapphire", "cobalt"]],
+  ["Currencies", "var(--c3)", ["credits", "stellar_tokens", "quantum_cores", "cosmic_dust", "catalyst_parts"]],
+];
+// Materials, in the game's own categories and order.
+const MAT_GROUPS = [
+  ["Laboratory Materials", ["warp capsule", "metal scrap", "anomaly"]],
+  ["Enemy Drop Materials", ["bones", "ectoplasm", "frost shard", "cog", "flame", "slime", "horn", "condensed sand"]],
+  ["Pets", ["pet food"]],
+  ["Items", ["weapon", "shield", "engine", "sensors", "laser", "probes"]],
+  ["Lab Building Products", ["ingots", "refined crystals", "high end crystals", "propulsors", "nanoconductors",
+                             "microcircuits", "fusion cells", "fuel cell casing", "unstable fuel"]],
+  ["Base Module Products", ["aerolite", "cryovita", "ferricrystal", "luminaris", "argoflux"]],
+];
+// Which building makes each product, in the game's building order.
+const MADE_BY = {"ingots": "Foundry", "refined crystals": "Refinery", "high end crystals": "Crystal Synthesis Lab",
+  "propulsors": "Noble Gas Processing Station", "nanoconductors": "Nanotech Complex", "microcircuits": "Circuit Integration Facility",
+  "fusion cells": "Energetic Fusion Center", "fuel cell casing": "Module Assembly Plant", "unstable fuel": "Fuel Lab",
+  "warp capsule": "Space Capsule Complex", "aerolite": "Aeroforge", "cryovita": "Cryovault", "ferricrystal": "Ferric Mill",
+  "luminaris": "Prism Nexus", "argoflux": "Rare Material Facility"};
+const RARE = new Set(["dark_matter", "silicon", "argon", "cobalt"]);
+const gameOrder = k => { for (const g of GROUPS) { const i = g[2].indexOf(k); if (i >= 0) return i; } return 99; };
+function groupOf(name) { const g = GROUPS.find(g => g[2].includes(name)); return g || ["Other", "var(--muted)", []]; }
+function bestBid(name) { const m = S.market.rows[name]; return m && m.ok && m.buy && m.buy.length ? m.buy[0].price : null; }
+function bestAsk(name) { const m = S.market.rows[name]; return m && m.ok && m.sell && m.sell.length ? m.sell[0].price : null; }
+const rateCell = r => isNum(r) && Math.abs(r) >= 0.05 ? `<span class="${r > 0 ? "pos" : "neg"}">${r > 0 ? "+" : ""}${short(r)}</span>` : "";
+function resourceRows() {
+  const cur = S.game.currency || {}, rates = S.rates || {};
+  return Object.keys(cur).map(k => ({k, v:cur[k], r:rates[k], g:groupOf(k),
+    val: k === "credits" ? cur[k] : (bestBid(k) != null ? cur[k] * bestBid(k) : null)}));
+}
+function sortRows(rows, how) {
+  const by = {value: (a, b) => (b.val ?? -1) - (a.val ?? -1) || b.v - a.v, amount: (a, b) => b.v - a.v,
+              change: (a, b) => (b.r ?? -Infinity) - (a.r ?? -Infinity), name: (a, b) => a.k.localeCompare(b.k),
+              game: (a, b) => gameOrder(a.k) - gameOrder(b.k)}[how] || ((a, b) => gameOrder(a.k) - gameOrder(b.k));
+  return rows.slice().sort(by);
+}
+function groupedTable(rows, cols, how, groupValue = true) {
+  const head = `<tr><th>Resource</th>${cols.map(c => `<th class="n">${esc(c.h)}</th>`).join("")}</tr>`;
+  let body = "";
+  for (const [gname, color] of [...GROUPS, ["Other", "var(--muted)"]]) {
+    const inG = sortRows(rows.filter(r => r.g[0] === gname), how);
+    if (!inG.length) continue;
+    const gval = inG.reduce((s, r) => s + (r.val || 0), 0);
+    body += `<tr class="group"><td colspan="${groupValue ? cols.length : cols.length + 1}"><span class="gdot" style="background:${color}"></span>${esc(gname)}</td>${groupValue ? `<td class="n">${gval ? short(gval) + " cr" : ""}</td>` : ""}</tr>`;
+    body += inG.map(r => `<tr><td><span class="gdot" style="background:${color};opacity:.5"></span>${esc(pretty(r.k))}${RARE.has(r.k) ? ' <span class="flag warn">rare</span>' : ""}</td>${cols.map(c => `<td class="n">${c.f(r)}</td>`).join("")}</tr>`).join("");
+  }
+  return `<table>${head}${body}</table>`;
+}
+function renderResources() {
+  const g = S.game, rates = S.rates || {};
+  if (!g.ok) { for (const id of ["restable", "mattable", "resmini"]) $(id).innerHTML = `<div class="empty">${esc(gameHint())}</div>`; $("ressub").textContent = ""; return; }
+  const rows = resourceRows();
+  const total = rows.reduce((s, r) => s + (r.val || 0), 0);
+  $("ressub").textContent = total ? `worth ${short(total)} credits` : "";
+  $("restable").innerHTML = groupedTable(rows, [
+    {h:"Amount", f:r => short(r.v)}, {h:"Per hour", f:r => rateCell(r.r)},
+    {h:"Sell price", f:r => r.k === "credits" ? "" : short(bestBid(r.k))}, {h:"Value", f:r => short(r.val)}], $("ressort").value)
+    + `<p class="note">Total priced: <b>${short(total)}</b> credits.</p>`;
+  // Overview: one line per group, in credits (the full list is on the Resources tab).
+  const perHour = r => r.k === "credits" ? r.r : (isNum(r.r) && bestBid(r.k) != null ? r.r * bestBid(r.k) : null);
+  const groups = [...GROUPS, ["Other", "var(--muted)"]].map(([name, color]) => {
+    const inG = rows.filter(r => r.g[0] === name);
+    return {name, color, n: inG.length, val: inG.reduce((s, r) => s + (r.val || 0), 0),
+            ph: inG.reduce((s, r) => s + (perHour(r) || 0), 0)};
+  }).filter(x => x.n);
+  const cr = (g.currency || {}).credits;
+  $("resmini").innerHTML = `<table><tr><th>Group</th><th class="n">Value</th><th class="n">Per hour</th></tr>
+    ${groups.map(x => `<tr><td><span class="gdot" style="background:${x.color}"></span>${esc(x.name)}</td><td class="n">${x.val ? short(x.val) : "–"}</td><td class="n">${rateCell(x.ph)}</td></tr>`).join("")}</table>
+    <p class="note">In credits at the best buy order${isNum(cr) ? `; ${short(cr)} credits on hand` : ""}. Every resource is on the Resources tab.</p>`;
+  const mats = g.materials || [];
+  let mbody = "";
+  for (const [gname, names] of [...MAT_GROUPS, ["Other", null]]) {
+    const inG = mats.filter(m => names ? names.includes(m.name) : !MAT_GROUPS.some(x => x[1].includes(m.name)))
+      .sort((a, b) => names ? names.indexOf(a.name) - names.indexOf(b.name) : String(a.name).localeCompare(String(b.name)));
+    if (!inG.length) continue;
+    mbody += `<tr class="group"><td colspan="3">${esc(gname)}</td></tr>`
+      + inG.map(m => `<tr><td>${esc(pretty(m.name))}${MADE_BY[m.name] ? ` <span class="mut">from ${esc(MADE_BY[m.name])}</span>` : ""}</td><td class="n">${short(m.quantity)}</td><td class="n">${rateCell(rates[m.name])}</td></tr>`).join("");
+  }
+  $("mattable").innerHTML = mats.length ? `<table><tr><th>Material</th><th class="n">Amount</th><th class="n">Per hour</th></tr>${mbody}</table>` : `<div class="empty">No materials.</div>`;
+}
+
+// ---------- lab
+function labRowsNow() {
+  return (S.game.lab_rows || []).map(r => r.queued && r.finish_ms ? {...r, remaining_s: Math.max(0, (r.finish_ms - Date.now())/1000)} : r);
+}
+const pbar = r => `<div class="bar"><i style="width:${Math.round(100*Math.max(0,Math.min(1,r.progress||0)))}%"></i></div>`;
+function labTable(rows, wide) {
+  if (!rows.length) return `<div class="empty">None.</div>`;
+  const line = r => {
+    const state = r.queued ? pbar(r) : r.built ? '<span class="warnt">idle</span>' : '<span class="mut">not built</span>';
+    const left = r.queued ? (r.remaining_s > 0 ? dur(r.remaining_s) : '<span class="pos">done</span>') : "";
+    const fin = r.queued && r.finish_ms ? esc(clock(r.finish_ms)) + (overnight(r.finish_ms) ? ' <span title="Finishes overnight">🌙</span>' : "") : "";
+    return wide
+      ? `<tr><td>${esc(r.name)}</td><td class="n">${r.level ?? "–"}</td><td>${state}</td><td class="n">${r.queued ? `${short(r.claimed)} / ${short(r.total)}` : ""}</td><td class="n">${left}</td><td>${fin}</td><td class="n">${r.queued ? "x" + esc(r.multiplier) : ""}</td></tr>`
+      : `<tr><td>${esc(r.name)}</td><td>${state}</td><td class="n">${left}</td><td>${fin}</td></tr>`;
+  };
+  const head = wide ? `<tr><th>Building</th><th class="n">Level</th><th>Progress</th><th class="n">Done</th><th class="n">Time left</th><th>Finishes</th><th class="n">Speed</th></tr>`
+                    : `<tr><th>Building</th><th>Progress</th><th class="n">Left</th><th>Finishes</th></tr>`;
+  return `<table>${head}${rows.map(line).join("")}</table>`;
+}
+function labCount(rows) { const q = rows.filter(r => r.queued).length, i = rows.filter(r => !r.queued && r.built).length, nb = rows.filter(r => !r.built).length;
+  return [`${q} running`, i ? `${i} idle` : "", nb ? `${nb} not built` : ""].filter(Boolean).join(", "); }
+function renderLab() {
+  const rows = labRowsNow();
+  if (!S.game.ok) { for (const id of ["basetable", "labtable", "labmini"]) $(id).innerHTML = `<div class="empty">${esc(gameHint())}</div>`; return; }
+  const base = rows.filter(r => r.kind === "base"), lab = rows.filter(r => r.kind !== "base");
+  $("basecount").textContent = labCount(base); $("labcount").textContent = labCount(lab);
+  $("basetable").innerHTML = labTable(base, true);
+  $("labtable").innerHTML = labTable(lab, true);
+  $("labsub").textContent = labCount(rows);
+  // Overview: running queues only; idle buildings in one line.
+  const running = rows.filter(r => r.queued), idle = rows.filter(r => !r.queued && r.built);
+  $("labmini").innerHTML = (running.length ? labTable(running, false) : `<div class="empty">No queues running.</div>`)
+    + (idle.length ? `<p class="note"><span class="warnt">Idle:</span> ${idle.map(r => esc(r.name)).join(", ")}</p>` : "");
+  for (const r of rows) if (r.queued && r.remaining_s <= 0 && r.finish_ms) alertOnce(`lab:${r.id}:${r.finish_ms}`, "Lab queue finished", `${r.name} is done.`);
+}
+
+// ---------- market
+function renderMarket() {
+  const m = S.market;
+  if (!m.enabled) { $("marketsub").textContent = "Market prices are off (started with --no-market)."; $("markettable").innerHTML = ""; return; }
+  $("marketsub").textContent = m.in_progress ? `Updating prices… ${m.in_progress} left.` :
+    m.next_sweep_at ? `Next update ${clock(m.next_sweep_at*1000)} (every ${m.minutes} min).` : "Waiting for the game.";
+  const rows = Object.keys(m.rows).map(k => ({k, g:groupOf(k), val:0, v:0}));
+  if (!rows.length) { $("markettable").innerHTML = `<div class="empty">${S.game.ok ? "Fetching the first prices…" : esc(gameHint())}</div>`; return; }
+  const cell = (r, f) => { const x = m.rows[r.k]; return x && x.ok ? f(x) : ""; };
+  const T = S.trends || {}, held = S.game.currency || {};
+  const thin = (k, x) => isNum(held[k]) && isNum(x.buy?.[0]?.quantity) && held[k] > x.buy[0].quantity;
+  $("markettable").innerHTML = groupedTable(rows, [
+    {h:"Best buy", f:r => m.rows[r.k].ok ? short(bestBid(r.k)) : `<span class="mut">n/a</span>`},
+    {h:"Best sell", f:r => cell(r, () => short(bestAsk(r.k)))},
+    {h:"Spread", f:r => cell(r, () => { const b = bestBid(r.k), a = bestAsk(r.k); return b != null && a != null ? short(a - b) + (b ? ` <span class="mut">(${Math.round((a-b)/b*100)}%)</span>` : "") : "–"; })},
+    {h:"7-day trend", f:r => spark(T[r.k]?.series || [], 110, 22)},
+    {h:"24 h", f:r => { const c = T[r.k]?.change_24h; return isNum(c) ? `<span class="${c > 0 ? "pos" : c < 0 ? "neg" : "mut"}">${c > 0 ? "+" : ""}${(c*100).toFixed(1)}%</span>` : ""; }},
+    {h:"Buy depth", f:r => cell(r, x => short(x.buy?.[0]?.quantity) + (thin(r.k, x) ? ' <span class="flag warn" title="You hold more than the top buy order takes; selling it all would walk down the price">thin</span>' : ""))},
+    {h:"Sell depth", f:r => cell(r, x => short(x.sell?.[0]?.quantity))},
+    {h:"Updated", f:r => esc(ago(m.rows[r.k].at)) + (m.rows[r.k].stale_error ? ' <span class="flag bad">stale</span>' : "")}], "game", false);
+}
+$("mrefresh").onclick = () => api("/api/market/refresh", {method:"POST", body:"{}"}).catch(() => {});
+
+// ---------- skills and account
+const SKILLS = [["battle", "Battling"], ["gather", "Gathering"], ["craft", "Crafting"], ["explore", "Exploring"]];
+function renderSkills() {
+  if (!S.game.ok) { $("skills").innerHTML = `<div class="empty">${esc(gameHint())}</div>`; return; }
+  const T = S.game.timers || {}, V = S.skills || {};
+  $("skills").innerHTML = SKILLS.filter(([k]) => T[k] && T[k].level != null).map(([k, label]) => {
+    const t = T[k], v = V[k] || {}, pct = isNum(v.pct) ? v.pct : (isNum(t.xp) && t.xp_target ? t.xp / t.xp_target : null);
+    const active = k === "explore" ? t.travelling : t.active;
+    return `<div class="skill"><div class="top"><span class="k">${esc(label)}</span><span class="spacer"></span>
+        <span class="lv">${esc(t.level)}</span></div>
+      ${pct != null ? `<div class="bar"><i style="width:${Math.round(100*Math.max(0,Math.min(1,pct)))}%"></i></div>
+        <div class="s">${short(t.xp)} / ${short(t.xp_target)} XP (${Math.floor(pct*100)}%)</div>` : `<div class="s">XP not shown by the game</div>`}
+      <div class="s">${isNum(v.xp_per_hour) && v.xp_per_hour > 0 ? `${short(v.xp_per_hour)} XP/h · next level in ${dur(v.eta_s)}` : active ? "Measuring XP per hour…" : "Not training now"}</div></div>`;
+  }).join("") || `<div class="empty">No skill data.</div>`;
+}
+function renderAccount() {
+  if (!S.game.ok) { $("account").innerHTML = `<div class="empty">${esc(gameHint())}</div>`; return; }
+  const T = S.game.timers || {}, e = T.explore || {}, v = T.voyager || {}, P = S.game.pets || {}, now = Date.now();
+  const frac = (a, b) => isNum(a) ? `${short(a)}${isNum(b) ? " / " + short(b) : ""}` : "–";
+  const fbar = (a, b) => isNum(a) && b ? `<div class="bar" style="margin-top:3px;max-width:220px"><i style="width:${Math.round(100*Math.max(0,Math.min(1,a/b)))}%"></i></div>` : "";
+  const ready = toMs(e.engine_ready_at);
+  const rows = [
+    ["Ship fuel", frac(e.fuel)],
+    ["Engine", e.travelling ? "Travelling" : ready && ready > now ? `Cooling down, ready ${esc(clock(ready))}` : "Ready"],
+    ["Voyager fuel", frac(v.fuel, v.fuel_max) + fbar(v.fuel, v.fuel_max)],
+    ["Voyager route", isNum(v.queue) ? (v.queue ? `${v.queue} jump${v.queue === 1 ? "" : "s"} left` + (toMs(v.last_eta) ? `, done ${esc(clock(toMs(v.last_eta)))}` : "") : '<span class="warnt">idle</span>') : "–"],
+  ];
+  if (v.queue && v.dust) rows.push(["Route dust", short(v.dust)]);
+  const slotted = P.slotted || [];
+  rows.push(["Pets", isNum(P.owned) ? `${P.owned} owned, ${slotted.length} of ${P.slots ?? "–"} slots used` : "–"]);
+  if (slotted.length) rows.push(["Equipped", slotted.map(p => esc((p.name || "pet") + (p.level != null ? ` lv ${p.level}` : ""))
+    + (isNum(p.food) && p.food < 20 ? ` <span class="warnt">food ${short(p.food)}</span>` : "")).join(", ")
+    + (slotted.some(p => isNum(p.food)) ? ` <span class="mut">(lowest food ${short(Math.min(...slotted.filter(p => isNum(p.food)).map(p => p.food)))})</span>` : "")]);
+  const boosts = (T.boosts || []).filter(b => toMs(b.end) > now);
+  rows.push(["Boosts", boosts.length ? boosts.map(b => `${esc(pretty(b.name))} <span class="mut">${dur((toMs(b.end)-now)/1000)}</span>`).join("<br>") : '<span class="mut">none active</span>']);
+  const pe = toMs(T.premium?.end);
+  rows.push(["Premium", T.premium?.active && pe ? `${dur((pe-now)/1000)} left` : '<span class="mut">off</span>']);
+  $("account").innerHTML = `<div class="kv">${rows.map(([k, x]) => `<div class="k">${esc(k)}</div><div>${x}</div>`).join("")}</div>`;
+}
+
+// ---------- progress: net worth, income, leaderboards
+function renderProgress() {
+  const W = S.worth;
+  if (!W) { $("worth").innerHTML = `<div class="empty">Saving is off for this dashboard.</div>`; }
+  else {
+    const c = W.change_24h;
+    $("worthsub").textContent = isNum(c) ? `${c >= 0 ? "+" : ""}${short(c)} in 24 h` : "";
+    $("worth").innerHTML = (isNum(W.current) ? `<div class="worthnum">${short(W.current)} <span class="mut" style="font-size:14px">credits</span></div>` : "")
+      + `<h3>Last two days</h3>${lineChart(W.recent, "Net worth over the last two days")}`
+      + (W.daily.length > 1 ? `<h3>By day</h3>${lineChart(W.daily, "Net worth by day")}` : "");
+  }
+  const inc = Object.entries(S.income || {}).filter(([, v]) => Math.abs(v) >= 1).sort((a, b) => b[1] - a[1]);
+  const total = inc.reduce((s, [, v]) => s + v, 0);
+  $("incomesub").textContent = inc.length ? `${total >= 0 ? "+" : ""}${short(total)} credits/h` : "";
+  const top = Math.max(1, ...inc.map(([, v]) => Math.abs(v)));
+  $("income").innerHTML = inc.length ? `<table><tr><th>Resource</th><th class="n">Per hour</th><th class="n">Credits/h</th><th></th></tr>
+    ${inc.slice(0, 14).map(([k, v]) => `<tr><td><span class="gdot" style="background:${groupOf(k)[1]}"></span>${esc(pretty(k))}</td><td class="n">${rateCell(S.rates[k])}</td>
+      <td class="n">${rateCell(v)}</td><td style="width:35%"><div class="bar"><i style="width:${Math.round(100*Math.abs(v)/top)}%;${v < 0 ? "background:var(--bad)" : ""}"></i></div></td></tr>`).join("")}</table>`
+    + (inc.length > 14 ? `<p class="note">${inc.length - 14} smaller ones not shown.</p>` : "")
+    : `<div class="empty">${S.game.ok ? "Needs 10+ minutes of history and market prices." : esc(gameHint())}</div>`;
+  renderBoards();
+}
+const BOARDS = [["stellar-defense", "Stellar Defense"], ["stellar-doom", "Stellar Doom"], ["stellar-highway", "Stellar Highway"]];
+function renderBoards() {
+  const L = S.leaderboards || {};
+  $("boards").innerHTML = BOARDS.map(([key, title]) => {
+    const b = L[key], extra = hooks.boardRows.flatMap(f => f(key, S) || []);
+    const meta = r => [r.wave != null ? `wave ${r.wave}` : "", r.kills != null ? `${short(r.kills)} kills` : ""].filter(Boolean).join(", ");
+    let body;
+    if (!b) body = `<div class="empty">${S.game.ok ? "Loading…" : esc(gameHint())}</div>`;
+    else if (!b.ok) body = `<div class="empty">Could not read the leaderboard${b.status ? ` (HTTP ${esc(b.status)})` : ""}.</div>`;
+    else body = `<table><tr><th>#</th><th>Player</th><th class="n">Score</th><th></th></tr>
+      ${(b.top || []).map((r, i) => `<tr><td>${r.rank ?? i + 1}</td><td>${esc(r.username)}</td><td class="n">${short(r.score)}</td><td class="mut">${esc(meta(r))}</td></tr>`).join("")}</table>
+      <div class="kv" style="margin-top:8px">
+        <div class="k">You</div><div>${b.mine ? `${short(b.mine.score)}${b.mine.rank != null ? ` (#${esc(b.mine.rank)})` : ""} <span class="mut">${esc(meta(b.mine))}</span>` : '<span class="mut">in the top five, or no score this week</span>'}</div>
+        ${extra.map(([k, v]) => `<div class="k">${esc(k)}</div><div>${v}</div>`).join("")}
+        ${b.total != null ? `<div class="k">Players</div><div>${short(b.total)}</div>` : ""}
+      </div>`;
+    return `<div class="board"><h3>${esc(title)}</h3>${body}</div>`;
+  }).join("");
+  const at = Math.max(0, ...Object.values(L).map(b => b.at || 0));
+  $("boardsub").textContent = "This week's top five and your entry." + (at ? ` Read ${ago(at)}; refreshed every 15 minutes.` : "");
+}
+
+function renderConn() {
+  const g = S.game, c = $("conn");
+  const cls = g.connected && g.ok ? "on" : g.connected ? "warn" : "bad";
+  const txt = g.connected && g.ok ? `Game connected · ${ago(g.updated_at)}` : g.connected ? "Game open, waiting for account data" : "Game not connected";
+  c.innerHTML = `<span class="dot ${cls}"></span><span>${esc(txt)}</span>`;
+  c.title = g.why || "";
+  const gi = g.gameinfo || {};
+  $("patch").hidden = !gi.patch;
+  $("patch").textContent = gi.patch ? `Game ${gi.patch}${gi.maintenance ? " · maintenance" : ""}` : "";
+  $("ver").textContent = S.version ? "v" + S.version : "";
+  const u = S.update || {};
+  $("newver").hidden = !u.newer; if (u.newer) { $("newver").textContent = `Update available: ${u.latest}`; $("newver").href = u.url; }
+  $("patch").title = isNum(gi.online) ? `${nf.format(gi.online)} players online` + (isNum(gi.ping) ? `, ping ${gi.ping} ms` : "") : "";
+}
+
+async function tick() {
+  try { S = await api("/api/state"); } catch { $("conn").innerHTML = `<span class="dot bad"></span><span>Dashboard server stopped</span>`; return; }
+  renderConn(); renderNeeds(); renderResources(); renderLab(); renderMarket(); renderSkills(); renderAccount();
+  if (tab === "progress") renderProgress();
+  for (const f of hooks.tick) f(S);
+}
+
+// ---------- add-on access
+window.SD = {
+  get S() { return S; }, get tab() { return tab; }, TOKEN, hooks, $, esc, nf, isNum, short, num, pretty, dur, clock, ago, toMs,
+  api, spark, lineChart, alertOnce, showTab, addTab, renderBoards: () => { if (S && tab === "progress") renderBoards(); },
+};
+// Start once every script on the page has run, so add-on tabs exist before the saved tab is restored.
+addEventListener("DOMContentLoaded", () => {
+  showTab(tab);
+  setInterval(tick, 2000); tick();
+  setInterval(() => { if (S) { renderLab(); renderNeeds(); } }, 1000);
+});
+</script>
+</body>
+</html>

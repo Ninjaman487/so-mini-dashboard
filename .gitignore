@@ -1,0 +1,17 @@
+*.egg-info/
+*.pyc
+*.spec
+.claude/
+.pytest_cache/
+.venv/
+AGENTS.md
+CLAUDE.md
+__pycache__/
+build/
+dist/
+docs/DECISIONS.md
+docs/PLAN.md
+docs/TASKS.md
+docs/research/
+docs/reviews/
+venv/

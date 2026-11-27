@@ -1,0 +1,162 @@
+<style>
+.dg-head { display:flex; flex-wrap:wrap; gap:18px; align-items:baseline; }
+.dg-head .k { color:var(--ink2); font-size:12px; } .dg-head .v { font-size:20px; font-weight:650; font-variant-numeric:tabular-nums; }
+.dg-plan { display:grid; grid-template-columns:repeat(auto-fill,minmax(290px,1fr)); gap:10px; }
+.dg-pick { border:1px solid var(--ring); border-radius:10px; padding:10px 12px; }
+.dg-pick .r { font-size:22px; font-weight:650; font-variant-numeric:tabular-nums; margin:2px 0 6px; }
+.dg-kv { display:grid; grid-template-columns:auto 1fr; gap:2px 12px; font-size:13px; }
+.dg-kv .k { color:var(--ink2); } .dg-kv .v { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.dg-rooms { font:12px ui-monospace,Consolas,monospace; letter-spacing:1px; }
+.dg-tag { font-size:11.5px; border-radius:999px; padding:1px 8px; border:1px solid var(--ring); color:var(--ink2); white-space:nowrap; }
+.dg-tag.here { color:var(--good); border-color:var(--good); } .dg-tag.travel { color:var(--warn); border-color:var(--warn); }
+tr.dg-off td { color:var(--muted); }
+.dg-bar { display:flex; gap:8px; align-items:center; }
+.dg-days { display:flex; align-items:flex-end; gap:4px; height:90px; margin:8px 0 2px; }
+.dg-days div { flex:1; background:var(--c0); border-radius:3px 3px 0 0; min-height:1px; }
+.dg-days div.today { opacity:.6; }
+.dg-dlab { display:flex; gap:4px; font-size:10.5px; color:var(--muted); } .dg-dlab span { flex:1; text-align:center; }
+.dg-lim { display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin:10px 0 2px; font-size:13px; }
+.dg-lim input { width:90px; font:inherit; padding:4px 6px; border-radius:6px; border:1px solid var(--axis); background:var(--surface); color:var(--ink); }
+</style>
+
+<template id="dg-view">
+  <div class="card">
+    <div class="dg-bar"><h2 style="flex:1">Solo dungeons</h2>
+      <span class="mut" id="dgread"></span><button class="btn" id="dgrefresh">Refresh</button></div>
+    <div id="dgmsg"></div>
+    <div class="dg-lim"><b>Max travel</b>
+      <label>from you <input id="dgmaxhere" type="number" min="0" step="500" placeholder="any"> ly</label>
+      <label>from nearest station <input id="dgmaxst" type="number" min="0" step="500" placeholder="any"> ly</label>
+      <span class="mut" title="Farther entrances stay listed but are left out of the plan. Either route is enough.">ⓘ</span></div>
+    <div class="dg-head" id="dghead"></div>
+  </div>
+  <div class="card"><h2>Run today <span class="count" id="dgplansub"></span></h2><div class="dg-plan" id="dgplan"></div></div>
+  <div class="card"><h2>Open entrances <span class="count" id="dgentsub"></span></h2>
+    <p class="sub">B battle · G gather · C craft · E explore · X boss. Relics without Power-Up.</p>
+    <div id="dgents"></div></div>
+  <div class="card"><h2>Relic tracker <span class="count" id="dgtrsub"></span></h2>
+    <p class="sub">Relics per day (UTC).</p>
+    <div id="dgtrack"></div></div>
+  <div class="card"><h2>Upgrades <span class="count" id="dgupsub"></span></h2>
+    <p class="sub">Extra relics per run.</p>
+    <div id="dgsetup"></div><div id="dgups"></div><div id="dgbest" style="margin-top:8px"></div></div>
+  <div class="card"><h2>Checks</h2><div id="dgchecks" class="sub" style="margin:0"></div></div>
+</template>
+
+<script>
+(() => {
+const {$, esc, num, short, dur, api, hooks} = SD;
+SD.addTab("dungeons", "Dungeons", "").append(document.getElementById("dg-view").content.cloneNode(true));
+const letters = {battle:"B", gather:"G", craft:"C", explore:"E", boss:"X", prefight:""};
+const rooms = rs => (rs || []).map(r => letters[r] ?? "?").join("");
+const pct = v => (v > 0 ? "+" : "") + v + "%";
+const access = a => `<span class="dg-tag ${a}">${{here:"In this system", voyager:"Voyager access", travel:"Travel there"}[a] || esc(a)}</span>`;
+const ends = r => r.ends ? esc(SD.pretty(r.ends)) + (r.weak_stats?.length ? ` (${esc(r.weak_stats.join("/"))})` : "") : "–";
+const left = s => s == null ? "?" : s <= 0 ? "expired" : dur(s);
+const cost = c => Object.entries(c || {}).map(([k, v]) => `${short(v)} ${esc(SD.pretty(k))}`).join(", ");
+let V = null, busy = false, at = 0;
+
+const lim = {here: localStorage.getItem("dg-maxhere") || "", st: localStorage.getItem("dg-maxst") || ""};
+$("dgmaxhere").value = lim.here; $("dgmaxst").value = lim.st;
+for (const [id, key, k] of [["dgmaxhere", "dg-maxhere", "here"], ["dgmaxst", "dg-maxst", "st"]])
+  $(id).onchange = () => { lim[k] = $(id).value.trim(); localStorage.setItem(key, lim[k]); load(false); };
+const ly = v => v == null ? '<span class="mut">?</span>' : short(Math.round(v)) + " ly";
+async function load(refresh) {
+  if (busy) return; busy = true; $("dgread").textContent = "Reading the game…";
+  const q = new URLSearchParams();
+  if (refresh) q.set("refresh", "1");
+  if (lim.here !== "") q.set("max_here", lim.here);
+  if (lim.st !== "") q.set("max_station", lim.st);
+  try { V = await api("/api/dungeons" + (q.toString() ? "?" + q : "")); at = Date.now(); render(); }
+  catch (e) { $("dgmsg").innerHTML = `<div class="empty">Could not reach the dashboard server (${esc(e.message)}).</div>`; }
+  finally { busy = false; }
+}
+$("dgrefresh").onclick = () => load(true);
+
+function render() {
+  $("dgread").textContent = V.read_at ? "Read " + new Date(V.read_at * 1000).toLocaleTimeString([], {hour:"numeric", minute:"2-digit"}) : "";
+  if (!V.ok) {
+    $("dgmsg").innerHTML = `<div class="empty">${esc(V.why || "No data yet.")}</div>`;
+    for (const id of ["dghead", "dgplan", "dgents", "dgtrack", "dgsetup", "dgups", "dgbest", "dgchecks"]) $(id).innerHTML = "";
+    return;
+  }
+  $("dgmsg").innerHTML = (V.errors || []).map(e => `<div class="warnt">${esc(e)}</div>`).join("");
+  $("dghead").innerHTML = [["Runs today", `${V.runs_done}/${V.runs_max}`], ["Start level", V.start_level],
+    ["Entry cost", short(V.entry_cost) + " credits"], ["Relics held", num(V.relics_held)],
+    ["Today's plan", short(V.plan_relics) + " relics"]]
+    .map(([k, v]) => `<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+
+  const plan = V.plan || [];
+  $("dgplansub").textContent = V.runs_done >= V.runs_max ? "all runs used, reset at midnight UTC"
+    : `${V.runs_max - V.runs_done} left` + (plan.length ? ` · next start ${V.start_after_plan}` : "");
+  const kv = rows => `<div class="dg-kv">${rows.filter(Boolean).map(([k, v]) => `<span class="k">${k}</span><span class="v">${v}</span>`).join("")}</div>`;
+  $("dgplan").innerHTML = plan.length ? plan.map((r, i) => `<div class="dg-pick">
+      <div style="display:flex;justify-content:space-between;gap:8px"><b>${i + 1}. ${esc(r.system)}</b>${access(r.access)}</div>
+      <div class="r">${short(r.relics)} <span class="mut" style="font-size:13px;font-weight:500">relics</span></div>
+      ${kv([["Levels", `${r.start_level} → ${r.highest}`], ["Closes in", left(r.expires_in)], ["Reward", pct(r.reward_modifier)],
+            ["Weakness", esc(r.boss_weakness ? SD.pretty(r.boss_weakness) : "–")],
+            ["Power-Up", r.powerup ? `${esc(r.powerup)} <span class="pos">+${short(r.powerup_gain)}</span>${r.powerup_owned != null ? ` <span class="mut">(have ${num(r.powerup_owned)})</span>` : ""}` : "–"],
+            ["From you", ly(r.dist_here)], ["From station", ly(r.dist_station)], ["Coordinates", esc(r.coords || "–")]])}
+    </div>`).join("")
+    : `<div class="empty">${V.runs_done >= V.runs_max ? "No runs left today." : "No entrances in reach."}</div>`;
+
+  const T = V.tracker;
+  if (!T || !T.complete) { $("dgtrsub").textContent = ""; $("dgtrack").innerHTML = `<div class="empty">No solo logs yet.</div>`; }
+  else {
+    $("dgtrsub").textContent = `${short(T.today)} today · ${short(T.last_7_days)} last 7 days`;
+    const days = T.per_day, top = Math.max(1, ...days.map(d => d[1]));
+    const runs = T.runs.slice(0, 10);
+    $("dgtrack").innerHTML = `<div class="dg-days">${days.map((d, i) => `<div class="${i === days.length - 1 ? "today" : ""}" style="height:${(d[1] / top * 100).toFixed(1)}%" title="${d[0]}: ${num(d[1])} relics"></div>`).join("")}</div>
+      <div class="dg-dlab">${days.map((d, i) => `<span>${i % 2 === days.length % 2 ? d[0].slice(5) : ""}</span>`).join("")}</div>
+      ${T.matched ? `<p class="sub" style="margin-top:8px">Actual / predicted: <b>${Math.round(T.actual_vs_predicted * 100)}%</b> (${T.matched} runs)</p>` : ""}
+      <table><tr><th>Finished</th><th class="n">Start</th><th class="n">Last clear</th><th class="n">Reward</th><th class="n">Relics</th><th class="n">Predicted</th></tr>
+      ${runs.map(r => `<tr><td>${esc(new Date(r.t * 1000).toLocaleString([], {weekday:"short", hour:"numeric", minute:"2-digit"}))}</td>
+        <td class="n">${r.start ?? "–"}</td><td class="n">${r.top ?? "–"}${r.predicted_top != null ? ` <span class="mut">/ ${r.predicted_top}</span>` : ""}</td>
+        <td class="n">${r.reward_modifier != null ? pct(r.reward_modifier) : "–"}</td><td class="n">${num(r.relics)}</td>
+        <td class="n">${r.predicted != null ? num(r.predicted) + ` <span class="${r.relics >= r.predicted ? "pos" : "neg"}">(${r.relics >= r.predicted ? "+" : ""}${num(r.relics - r.predicted)})</span>` : '<span class="mut">–</span>'}</td></tr>`).join("")}</table>`;
+  }
+
+  $("dgentsub").textContent = V.entrances.length ? `${V.entrances.length}` : "";
+  $("dgents").innerHTML = V.entrances.length ? `<table><tr><th>System</th><th>Coordinates</th><th>Access</th><th class="n">From you</th><th class="n">From station</th><th class="n">Closes in</th><th>Rooms</th>
+      <th class="n">Reward</th><th class="n">Difficulty</th><th>Weakness</th><th class="n">Levels</th><th>Ends on</th>
+      <th class="n">Relics</th><th class="n" title="Estimated start level of your next run if you run this one now">Next start</th><th>Best Power-Up</th><th class="n">Extra</th></tr>
+    ${V.entrances.map(r => `<tr class="${r.usable && !r.too_far ? "" : "dg-off"}"><td>${r.in_plan ? "★ " : ""}${esc(r.system)}${!r.usable ? ' <span class="mut">(ran)</span>' : r.too_far ? ' <span class="mut">(too far)</span>' : ""}</td><td>${esc(r.coords || "–")}</td>
+      <td>${access(r.access)}</td><td class="n">${ly(r.dist_here)}</td><td class="n" title="${esc(r.station || "")}">${ly(r.dist_station)}</td><td class="n">${left(r.expires_in)}</td><td class="dg-rooms">${rooms(r.rooms)}</td>
+      <td class="n">${pct(r.reward_modifier)}</td><td class="n">${pct(r.difficulty_modifier)}</td><td>${esc(r.boss_weakness ? SD.pretty(r.boss_weakness) : "–")}</td>
+      <td class="n">${r.highest ? `${V.start_level} → ${r.highest}` : "–"}</td><td>${ends(r)}</td><td class="n">${short(r.relics)}</td>
+      <td class="n">${r.next_start}${r.next_start !== V.start_level ? ` <span class="mut">(${r.next_start > V.start_level ? "+" : ""}${r.next_start - V.start_level})</span>` : ""}</td>
+      <td>${esc(r.powerup || "–")}</td><td class="n">${r.powerup ? `<span class="pos">+${short(r.powerup_gain)}</span>` : "–"}</td></tr>`).join("")}</table>`
+    : `<div class="empty">No solo dungeon entrances are open.</div>`;
+
+  const U = V.upgrades;
+  if (!U) { $("dgupsub").textContent = ""; $("dgsetup").innerHTML = `<div class="empty">Open Dungeons > Setup in the game.</div>`; $("dgups").innerHTML = $("dgbest").innerHTML = ""; }
+  else if (!U.ok) { $("dgsetup").innerHTML = `<div class="empty">${esc(U.why)}</div>`; $("dgups").innerHTML = $("dgbest").innerHTML = ""; }
+  else {
+    $("dgupsub").textContent = `now ${short(U.per_run)} per run`;
+    $("dgsetup").innerHTML = `<table><tr><th>Activity</th><th class="n">Boost</th><th class="n">Tier</th><th class="n">Radiation</th><th class="n">Dungeon power held</th></tr>
+      ${Object.entries(U.setup).map(([a, s]) => {
+        const b = Object.entries(s).find(([x]) => x.endsWith("_boost")), t = Object.entries(s).find(([x]) => x.endsWith("_tier")),
+              p = Object.entries(s).find(([x]) => x.endsWith("_power"));
+        return `<tr><td>${esc(a)}</td><td class="n">${b ? b[1] : "–"}</td><td class="n">${t ? t[1] : "–"}</td><td class="n">${s.radiation_prot ?? "–"}</td>
+                <td class="n">${p ? short(p[1]) + ' <span class="mut">' + esc(SD.pretty(p[0])) + "</span>" : "–"}</td></tr>`; }).join("")}</table>`;
+    const ok = U.options.filter(o => o.gain > 0);
+    $("dgups").innerHTML = ok.length ? `<table style="margin-top:8px"><tr><th>Upgrade</th><th class="n">Relics/run</th><th class="n">Gain</th><th>Can buy</th><th>Cost</th><th class="n">Payback</th></tr>
+      ${ok.map(o => `<tr><td>${esc(o.label)}</td><td class="n">${short(o.after)}</td><td class="n pos">+${short(o.gain)}</td>
+        <td>${o.can_afford === true ? '<span class="pos">yes</span>' : o.can_afford === false ? '<span class="neg">no</span>' : '<span class="mut">?</span>'}</td>
+        <td>${cost(o.cost)}</td><td class="n" title="${o.relic_cost ? short(o.relic_cost) + " relics at the vendor" : ""}">${o.relic_cost ? Math.ceil(o.relic_cost / o.gain) + " runs" : "–"}</td></tr>`).join("")}</table>`
+      : `<div class="empty">No upgrade adds relics now.</div>`;
+    const B = U.best;
+    $("dgbest").innerHTML = B.steps.length
+      ? `<b>Best buy now:</b> ${esc(B.steps.join(", "))} · ${short(B.before)} → ${short(B.after)} per run · ${cost(B.cost)}`
+      : `<span class="mut">Best buy now: none</span>`;
+  }
+  $("dgchecks").innerHTML = [V.relic_check && `<div class="${V.relic_check_ok ? "" : "warnt"}">${esc(V.relic_check)}</div>`,
+    V.streak_check && `<div>${esc(V.streak_check)}</div>`].filter(Boolean).join("") || "No logs to check against yet.";
+}
+
+hooks.show.push(t => { if (t === "dungeons" && (!V || Date.now() - at > 60000)) load(false); });
+setInterval(() => { if (SD.tab === "dungeons" && Date.now() - at > 60000) load(false); }, 5000);
+// Ticks the "closes in" times between reads.
+setInterval(() => { if (SD.tab === "dungeons" && V && V.ok) { for (const r of V.entrances) if (r.expires_in != null) r.expires_in -= 1; render(); } }, 1000);
+})();
+</script>

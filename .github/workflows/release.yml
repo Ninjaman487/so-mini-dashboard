@@ -1,0 +1,47 @@
+# Push a tag like v1.0.1 (matching __version__ in stellar_dashboard/__init__.py) to build
+# SO-Mini-Dashboard.exe from this source and attach it to a GitHub release.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: python -m pip install -r requirements.txt pyinstaller pytest
+      - name: Test
+        run: python -m pytest -q tests
+      - name: Check tag matches version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          v=$(python -c "import stellar_dashboard as s; print(s.__version__)")
+          test "v$v" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} does not match version $v"; exit 1; }
+      - name: Build exe
+        run: python build_exe.py
+      - name: Checksum
+        shell: bash
+        run: cd dist && sha256sum SO-Mini-Dashboard.exe > SO-Mini-Dashboard.exe.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SO-Mini-Dashboard
+          path: dist/SO-Mini-Dashboard.exe*
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/SO-Mini-Dashboard.exe
+            dist/SO-Mini-Dashboard.exe.sha256
+          generate_release_notes: true
